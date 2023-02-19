@@ -10,6 +10,21 @@ test:
 	gcc --std=gnu99 -o smallsh main.c
 	./smallsh
 
+testscript-1:
+	clear
+	gcc --std=gnu99 -o smallsh main.c
+	./p3testscript 2>&1
+
+testscript-2:
+	clear
+	gcc --std=gnu99 -o smallsh main.c
+	./p3testscript 2>&1 | more
+
+testscript-3:
+	clear
+	gcc --std=gnu99 -o smallsh main.c
+	./p3testscript > mytestresults 2>&1 
+
 leak-test:
 	clear
 	gcc --std=gnu99 -o smallsh main.c
@@ -19,4 +34,3 @@ gdb-test:
 	clear
 	echo Run GDB with 'run'
 	gcc -g --std=gnu99 -o smallsh main.c
-	gdb ./smallsh
