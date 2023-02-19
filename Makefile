@@ -10,6 +10,11 @@ test:
 	gcc --std=gnu99 -o smallsh main.c
 	./smallsh
 
+testscript-basic:
+	clear
+	gcc --std=gnu99 -o smallsh main.c
+	./basicp3testscript 2>&1
+
 testscript-1:
 	clear
 	gcc --std=gnu99 -o smallsh main.c
@@ -34,3 +39,4 @@ gdb-test:
 	clear
 	echo Run GDB with 'run'
 	gcc -g --std=gnu99 -o smallsh main.c
+	gdb ./smallsh
