@@ -46,6 +46,7 @@ void getcmd(char *cmdLine){
  * @return int 1 if true, else 0
  */
 int checkExit(char *cmdLine){
+    //Check if command string is == 'exit'
     if(strcmp(CMD_EXIT, cmdLine) == 0){
         printf("\n");
         return 1;
@@ -75,7 +76,9 @@ int skipCmd(char *cmdLine){
  * @return int 
  */
 int isEcho(char *cmdLine){
+    // Check if command line is an echo command
     if(strncmp(CMD_ECHO, cmdLine, strlen(CMD_ECHO)) == 0){
+        // Echo message if one is present, otherwise new line
         if(strlen(cmdLine) > 5){
             printf("%s\n", &cmdLine[5]);
         } else {
@@ -95,6 +98,7 @@ int isEcho(char *cmdLine){
 struct command *createCmd(char *cmdLine){
     struct command *cmd = malloc(sizeof(struct command));
 
+    // Grab init command
     char *cmdptr;
     char *cmdtoken = strtok_r(cmdLine, " ", &cmdptr);
     cmd->cmd = calloc(strlen(cmdtoken) + 1, sizeof(char));
@@ -102,29 +106,42 @@ struct command *createCmd(char *cmdLine){
 
     cmdtoken = strtok_r(NULL, " ", &cmdptr);
 
+    // Check for extra params
     while(cmdtoken != NULL){
-        // printf("%s\n", cmdtoken);
+        //Check for running in background
         if (cmdtoken[0] == '&'){
             cmd->background = 1;
+        // Check for output file
         } else if (cmdtoken[0] == '>'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
             cmd->output = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            // printf("out is %s\n", cmdtoken);
             strcpy(cmd->output, cmdtoken);
+        // Check for input file
         } else if (cmdtoken[0] == '<'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
             cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            // printf("out is %s\n", cmdtoken);
             strcpy(cmd->input, cmdtoken);
+        // Check for arguments
         } else {
             strcpy(cmd->args[cmd->numArgs], cmdtoken);
             cmd->numArgs = cmd->numArgs + 1;
         }
-        // printf("reading\n");
+
         cmdtoken = strtok_r(NULL, " ", &cmdptr);
     }
 
     return cmd;
+}
+
+/**
+ * @brief Prints the status value of the last non-built in command
+ * 
+ * @param last 
+ * @return int 
+ */
+int isStatus(int last){
+    printf("%d", last);
+    return 1;
 }
 
 /**
@@ -133,17 +150,22 @@ struct command *createCmd(char *cmdLine){
  * @param cmd Command structure data
  * @return int 1 is built in, else 0
  */
-int isBuiltIn(struct command *cmd){
+int isBuiltIn(struct command *cmd, int *status){
+    // Check if cmd is a cd command
     if(strcmp(cmd->cmd,"cd") == 0){
         char *dir = malloc(sizeof(char) * BUFFER_SIZE);
+        // printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
+        // Cd to arg path if provided, else home
         if(cmd->numArgs >= 1){
             chdir(cmd->args[0]);
         } else {
-            chdir("/home/");
+            chdir(getenv("HOME"));
         }
         
         printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
         free(dir);
+    } else if (strcmp(cmd->cmd,"status") == 0){
+
     }
     return 0;
 }
@@ -169,25 +191,40 @@ void printCmd(struct command *cmd){
     printf("]\n");
 }
 
+void runCmd(struct command *cmd){
+    char *execArgs[BUFFER_SIZE];
+    execArgs[0] = cmd->cmd;
+
+    for(int i = 0; i < cmd->numArgs; i++){
+        execArgs[i + 1] = cmd->args[i];
+    }
+    execArgs[cmd->numArgs + 1] = NULL;
+
+    execvp(execArgs[0], execArgs);
+    perror("exexv");
+    exit(EXIT_FAILURE);
+}
+
 int main(){
     char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
+    int *lastStatus = 0;
 
     while (1){
         getcmd(cmdLine);
         cmdLine[strcspn(cmdLine, "\n")] = '\0';
 
-        
-        if(skipCmd(cmdLine)) continue;
+        if(skipCmd(cmdLine) || isEcho(cmdLine)) continue;
         if(checkExit(cmdLine)) break;
-        if(isEcho(cmdLine)) continue;
+
         fflush(stdout);
 
         struct command *cmd = createCmd(cmdLine);
         // printCmd(cmd);
-        if(isBuiltIn(cmd)) continue;
+        if(isBuiltIn(cmd, lastStatus)) continue;
         
-        // printf("Creating cmd\n");
-        // free(cmd);
+        runCmd(cmd);
+
+        free(cmd);
     }
 
     free(cmdLine);
