@@ -41,7 +41,6 @@ int skipCmd(char *cmdLine);
 int isEcho(char *cmdLine);
 void printCmd(struct command *cmd);
 struct command *createCmd(char *cmdLine);
-int isStatus(int last);
 int isBuiltIn(char *cmdLine, int *status);
 void setIOStreams(struct command *cmd);
 void runCmd(char *cmdLine, int *lastStatus);

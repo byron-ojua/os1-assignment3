@@ -1,41 +1,61 @@
-#include <dirent.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <time.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <dirent.h>
-#include <signal.h>
+#include "header.h"
 
-#define BUFFER_SIZE 2048
-#define CMD_EXIT "exit"
-#define CMD_ECHO "echo"
+// Exit status code video https://www.youtube.com/watch?v=DiNmwwQWl0g
+int main(){
+    int pid = getpid();
+    int lastStatus = 0;
+
+    // Ignore ^C
+	struct sigaction sa_sigint = {0};
+	sa_sigint.sa_handler = SIG_IGN;
+	sigfillset(&sa_sigint.sa_mask);
+	sa_sigint.sa_flags = 0;
+	sigaction(SIGINT, &sa_sigint, NULL);
+
+	// // Redirect ^Z to catchSIGTSTP()
+	// struct sigaction sa_sigtstp = {0};
+	// sa_sigtstp.sa_handler = catchSIGTSTP;
+	// sigfillset(&sa_sigtstp.sa_mask);
+	// sa_sigtstp.sa_flags = 0;
+	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
 
-/**
- * @brief Basic structure for holding command parameters
- * 
- */
-struct command{
-    char *cmd;
-    int background;
-    int in;
-    char *input;
-    int out;
-    char *output;
-    char args[512][BUFFER_SIZE];
-    int numArgs;
-};
+    while (1){
+        // Get command line input
+        char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
+        getcmd(cmdLine);
+        char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
+        strcpy(cmdCopy, cmdLine);
+        cmdLine[strcspn(cmdLine, "\n")] = '\0';
+        cmdCopy[strcspn(cmdCopy, "\n")] = '\0';
+
+        // Check if input a blank, comment, echo, or ecit command
+        if(skipCmd(cmdLine) || isEcho(cmdLine)) continue;
+        if(checkExit(cmdLine)) break;
+        fflush(stdout);
+
+        // If built i nfunction, run. Else run runCmd
+        if(isBuiltIn(cmdLine, &lastStatus)){
+            fflush(stdout);
+            continue;
+        } 
+        else {
+            runCmd(cmdCopy, &lastStatus);
+        }
+
+        fflush(stdout);
+        free(cmdLine);
+        free(cmdCopy);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 
 /**
  * @brief Retrieves cmd line input and puts it in a buffer
  * 
- * @param cmd Char string to put cmd in
+ * @param cmdLine Char string store input
  */
 void getcmd(char *cmdLine){
     printf(": ");
@@ -77,8 +97,8 @@ int skipCmd(char *cmdLine){
 /**
  * @brief Checks if the command is am echo command, and echos if so
  * 
- * @param cmdLine 
- * @return int 
+ * @param cmdLine char array to check
+ * @return int 1 if true, else 0 
  */
 int isEcho(char *cmdLine){
     // Check if command line is an echo command
@@ -107,6 +127,7 @@ void printCmd(struct command *cmd){
     printf("Background: %d\n", cmd->background);
     printf("Args: [");
 
+    // Loops and prints all arguments
     for (int i = 0; i < cmd->numArgs; i++){
         printf("%s", cmd->args[i]);
         if(i != cmd->numArgs - 1){
@@ -159,17 +180,6 @@ struct command *createCmd(char *cmdLine){
     }
 
     return cmd;
-}
-
-/**
- * @brief Prints the status value of the last non-built in command
- * 
- * @param last 
- * @return int 
- */
-int isStatus(int last){
-    printf("%d", last);
-    return 1;
 }
 
 /**
@@ -285,62 +295,4 @@ void runCmd(char *cmdLine, int *lastStatus){
     }
         // printf("The process with pid %d is returning from main\n", getpid());
         // free(cmd);
-}
-
-// Exit status code video https://www.youtube.com/watch?v=DiNmwwQWl0g
-int main(){
-    int pid = getpid();
-    int lastStatus = 0;
-
-
-    // Ignore ^C
-	struct sigaction sa_sigint = {0};
-	sa_sigint.sa_handler = SIG_IGN;
-	sigfillset(&sa_sigint.sa_mask);
-	sa_sigint.sa_flags = 0;
-	sigaction(SIGINT, &sa_sigint, NULL);
-
-	// // Redirect ^Z to catchSIGTSTP()
-	// struct sigaction sa_sigtstp = {0};
-	// sa_sigtstp.sa_handler = catchSIGTSTP;
-	// sigfillset(&sa_sigtstp.sa_mask);
-	// sa_sigtstp.sa_flags = 0;
-	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
-
-
-    while (1){
-        char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
-        getcmd(cmdLine);
-        char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
-        strcpy(cmdCopy, cmdLine);
-        cmdLine[strcspn(cmdLine, "\n")] = '\0';
-        cmdCopy[strcspn(cmdCopy, "\n")] = '\0';
-
-        // printf("%s\n", cmdLine);
-
-        if(skipCmd(cmdLine) || isEcho(cmdLine)) continue;
-        if(checkExit(cmdLine)) break;
-        fflush(stdout);
-
-        // printf("%s\n", cmdLine);
-        int builtIn = isBuiltIn(cmdLine, &lastStatus);
-        // printf("Testing built in %d\n", builtIn);
-
-        fflush(stdout);
-        if(builtIn){
-            // printf("I am inside builtIn if\n");
-            fflush(stdout);
-            continue;
-        } 
-        else {
-            fflush(stdout);
-            runCmd(cmdCopy, &lastStatus);
-        }
-
-        fflush(stdout);
-        free(cmdLine);
-        free(cmdCopy);
-    }
-
-    return EXIT_SUCCESS;
 }
