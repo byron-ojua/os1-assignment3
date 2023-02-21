@@ -19,11 +19,6 @@
 #define CMD_EXIT "exit"
 #define CMD_ECHO "echo"
 
-
-/**
- * @brief Basic structure for holding command parameters
- * 
- */
 struct command{
     char *cmd;
     int background;

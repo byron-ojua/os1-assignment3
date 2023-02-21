@@ -19,7 +19,6 @@ int main(){
 	// sa_sigtstp.sa_flags = 0;
 	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
-
     while (1){
         // Get command line input
         char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
@@ -55,7 +54,7 @@ int main(){
 /**
  * @brief Retrieves cmd line input and puts it in a buffer
  * 
- * @param cmdLine Char string store input
+ * @param cmdLine Char string to store input
  */
 void getcmd(char *cmdLine){
     printf(": ");
@@ -182,12 +181,13 @@ struct command *createCmd(char *cmdLine){
     return cmd;
 }
 
-/**
- * @brief Checks if command is built in, and runs if so
- * 
- * @param cmd Command structure data
- * @return int 1 is built in, else 0
- */
+ /**
+  * @brief Checks if command is built in, and runs if so
+  * 
+  * @param cmdLine char array of params to build command
+  * @param status int pointer to status var
+  * @return int 1 is built in, else 0
+  */
 int isBuiltIn(char *cmdLine, int *status){
     struct command *cmd = createCmd(cmdLine);
     // Check if cmd is a cd command
@@ -199,12 +199,13 @@ int isBuiltIn(char *cmdLine, int *status){
         } else {
             chdir(getenv("HOME"));
         }
-        
+        // print new CWD
         printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
         fflush(stdout);
         free(dir);
         free(cmd);
         return 1;
+    // Check if cmd is a status command
     } else if (strcmp(cmd->cmd,"status") == 0){
         printf("exit value %d\n", *status);
         free(cmd);
@@ -213,7 +214,13 @@ int isBuiltIn(char *cmdLine, int *status){
     return 0;
 }
 
+/**
+ * @brief Redirects input and output streams
+ * 
+ * @param cmd Command data struct containing params for stream redirects
+ */
 void setIOStreams(struct command *cmd){
+    // If there is a specified input stream
     if (cmd->in == 1){
         int file = open(cmd->input, O_RDONLY);
         if(file == -1){
@@ -221,10 +228,12 @@ void setIOStreams(struct command *cmd){
             fflush(stdout);
             exit(1);
         } else {
+            // Assign input file to input stream
             dup2(file, STDIN_FILENO);
             close(file);
         }
     }
+    // If there is a specified output stream
     if (cmd->out == 1){
         int file = open(cmd->output, O_WRONLY | O_TRUNC | O_CREAT, 0777);
         if(file == -1){
@@ -232,12 +241,19 @@ void setIOStreams(struct command *cmd){
             fflush(stdout);
             exit(1);
         } else {
+            // Assign input file to output stream
             dup2(file, STDOUT_FILENO);
             close(file);
         }
     }
 }
 
+/**
+ * @brief Runs and handles non built-in commands
+ * 
+ * @param cmdLine char array which contains data to mkae command
+ * @param lastStatus int for childExitStatus
+ */
 void runCmd(char *cmdLine, int *lastStatus){
     // Code from Exploration: Process API - Monitoring Child Processes
     struct command *cmd = createCmd(cmdLine);
@@ -248,12 +264,17 @@ void runCmd(char *cmdLine, int *lastStatus){
     spawnpid = fork();
     
     switch (spawnpid){
+        // If fork() fails
         case -1:
             perror("fork() failed!\n");
             exit(1);
             break;
+        // If process is child
         case 0:
+            // Redirect input files
             setIOStreams(cmd);
+
+            // Create array for exec() elements
             char *execArgs[BUFFER_SIZE];
             execArgs[0] = cmd->cmd;
 
@@ -266,21 +287,27 @@ void runCmd(char *cmdLine, int *lastStatus){
             execArgs[cmd->numArgs + 1] = NULL;
             fflush(stdout);
             // *lastStatus = 0;
+
+            // Run exec() process, and handle errors if it fails
             execvp(execArgs[0], execArgs);
             perror("exexvp");
             fflush(stdout);
             // *lastStatus = 1;
             exit(1);
             break;
+        // Parent function
         default:
+            // If child is a background process, do not wait for process exit and display childPID
             if(cmd->background){
                 pid_t runpid = waitpid(spawnpid, lastStatus, WNOHANG);
                 printf("background pid is %d\n", spawnpid);
                 fflush(stdout);
             } else {
+                // If forground process, wait for compleation
                 pid_t runpid = waitpid(spawnpid, lastStatus, 0);
             }
             
+            // Check for terminated processes, and what terminated the,
             while ((spawnpid = waitpid(-1, lastStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnpid);
                 if (WIFEXITED(lastStatus)) {
@@ -293,6 +320,4 @@ void runCmd(char *cmdLine, int *lastStatus){
                 fflush(stdout);
             }
     }
-        // printf("The process with pid %d is returning from main\n", getpid());
-        // free(cmd);
 }
