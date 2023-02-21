@@ -42,7 +42,6 @@ void getcmd(char *cmdLine){
     fflush(stdout);
     size_t bufsize = BUFFER_SIZE;
     getline(&cmdLine, &bufsize, stdin);
-    // printf("%s", cmdLine);
 }
 
 /**
@@ -124,26 +123,17 @@ void printCmd(struct command *cmd){
  * @param cmd Char array containing command
  */
 struct command *createCmd(char *cmdLine){
-    // char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
-
-    // strcpy(cmdCopy, cmdLine);
-    // printf("cmd in make is %s\n", cmdCopy);
-    // printf("%s\n", cmdLine);
     struct command *cmd = malloc(sizeof(struct command));
 
     // Grab init command
     char *cmdptr;
     char *cmdtoken = strtok_r(cmdLine, " ", &cmdptr);
-    // printf("%s\n", cmdLine);
     cmd->cmd = calloc(strlen(cmdtoken) + 1, sizeof(char));
     strcpy(cmd->cmd, cmdtoken);
-
     cmdtoken = strtok_r(NULL, " ", &cmdptr);
-    // printf("%s\n", cmdLine);
 
     // Check for extra params
     while(cmdtoken != NULL){
-        // printf("%s\n", cmdLine);
         //Check for running in background
         if (cmdtoken[0] == '&'){
             cmd->background = 1;
@@ -159,7 +149,6 @@ struct command *createCmd(char *cmdLine){
             cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
             strcpy(cmd->input, cmdtoken);
             cmd->in = 1;
-            // printf("%s\n", cmdtoken);
         // Check for arguments
         } else {
             strcpy(cmd->args[cmd->numArgs], cmdtoken);
@@ -169,10 +158,6 @@ struct command *createCmd(char *cmdLine){
         cmdtoken = strtok_r(NULL, " ", &cmdptr);
     }
 
-    // printCmd(cmd);
-    // printf("%s\n", cmdLine);
-    // printf("I made it this far\n");
-    // free(cmdCopy);
     return cmd;
 }
 
@@ -194,33 +179,27 @@ int isStatus(int last){
  * @return int 1 is built in, else 0
  */
 int isBuiltIn(char *cmdLine, int *status){
-    // // printf("This is built in with %s\n", cmdLine);
-    // struct command *cmd = createCmd(cmdLine);
-    // // printf("%s\n", cmd->cmd);
-    // // printf("I made it back to isBuilt in\n");
-    // // printf("%s\n", cmdLine);
-    // // printCmd(cmd);
-    // // Check if cmd is a cd command
-    // if(strcmp(cmd->cmd,"cd") == 0){
-    //     char *dir = malloc(sizeof(char) * BUFFER_SIZE);
-    //     // printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
-    //     // Cd to arg path if provided, else home
-    //     if(cmd->numArgs >= 1){
-    //         chdir(cmd->args[0]);
-    //     } else {
-    //         chdir(getenv("HOME"));
-    //     }
+    struct command *cmd = createCmd(cmdLine);
+    // Check if cmd is a cd command
+    if(strcmp(cmd->cmd,"cd") == 0){
+        char *dir = malloc(sizeof(char) * BUFFER_SIZE);
+        // Cd to arg path if provided, else home
+        if(cmd->numArgs >= 1){
+            chdir(cmd->args[0]);
+        } else {
+            chdir(getenv("HOME"));
+        }
         
-    //     printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
-    //     fflush(stdout);
-    //     free(dir);
-    //     free(cmd);
-    //     return 1;
-    // } else if (strcmp(cmd->cmd,"status") == 0){
-    //     // printf("exit value %d\n", *status);
-    //     free(cmd);
-    //     return 1;
-    // }
+        printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
+        fflush(stdout);
+        free(dir);
+        free(cmd);
+        return 1;
+    } else if (strcmp(cmd->cmd,"status") == 0){
+        printf("exit value %d\n", *status);
+        free(cmd);
+        return 1;
+    }
     return 0;
 }
 
@@ -251,80 +230,59 @@ void setIOStreams(struct command *cmd){
 
 void runCmd(char *cmdLine, int *lastStatus){
     // Code from Exploration: Process API - Monitoring Child Processes
-    printf("cmdLine is %s\n", cmdLine);
-    // char *copy = malloc(sizeof(char) * BUFFER_SIZE);
-    // strcpy(copy, cmdLine);
-
-
-    printf("I am in run\n");
-    fflush(stdout);
     struct command *cmd = createCmd(cmdLine);
-    // pid_t spawnpid = -5;
+    pid_t spawnpid = -5;
 
+    // Fork structure example from https://github.com/brentirwin/cs344-smallsh/blob/master/smallsh.c
 
-    // printCmd(cmd);
-    // printf("I have made cmd\n");
-    // printCmd(cmd);
-    // Fork example from https://github.com/brentirwin/cs344-smallsh/blob/master/smallsh.c
-
-
-    // printf("I am going to fork\n");
-    // spawnpid = fork();
+    spawnpid = fork();
     
-    // switch (spawnpid){
-    //     case -1:
-    //         perror("fork() failed!\n");
-    //         exit(1);
-    //         break;
-    //     case 0:
-    //         setIOStreams(cmd);
-    //         char *execArgs[BUFFER_SIZE];
-    //         execArgs[0] = cmd->cmd;
+    switch (spawnpid){
+        case -1:
+            perror("fork() failed!\n");
+            exit(1);
+            break;
+        case 0:
+            setIOStreams(cmd);
+            char *execArgs[BUFFER_SIZE];
+            execArgs[0] = cmd->cmd;
 
-    //         printf("I am going to add arguments\n");
-    //         fflush(stdout);
-    //         if(cmd->args[0]){
-    //             for(int i = 0; i < cmd->numArgs; i++){
-    //                 execArgs[i + 1] = cmd->args[i];
-    //             }
-    //         }
-    //         printf("I am going to add null\n");
-    //         fflush(stdout);
-    //         execArgs[cmd->numArgs + 1] = NULL;
-    //         printf("I added null\n");
-    //         fflush(stdout);
-    //         printCmd(cmd);
-    //         // printf("%s\n", execArgs[0]);
-    //         // printf("%s\n", execArgs[1]);
-    //         // fflush(stdout);
+            if(cmd->args[0]){
+                for(int i = 0; i < cmd->numArgs; i++){
+                    execArgs[i + 1] = cmd->args[i];
+                }
+            }
 
-    //         execvp(execArgs[0], execArgs);
-    //         printf("I should not be here\n");
-    //         perror("exexvp");
-    //         fflush(stdout);
-    //         exit(1);
-
-    //         break;
-    //     default:
-    //         if(cmd->background){
-    //             pid_t runpid = waitpid(spawnpid, lastStatus, WNOHANG);
-    //             printf("background pid is %d\n", spawnpid);
-    //             fflush(stdout);
-    //         } else {
-    //             pid_t runpid = waitpid(spawnpid, lastStatus, 0);
-    //         }
+            execArgs[cmd->numArgs + 1] = NULL;
+            fflush(stdout);
+            // *lastStatus = 0;
+            execvp(execArgs[0], execArgs);
+            perror("exexvp");
+            fflush(stdout);
+            // *lastStatus = 1;
+            exit(1);
+            break;
+        default:
+            if(cmd->background){
+                pid_t runpid = waitpid(spawnpid, lastStatus, WNOHANG);
+                printf("background pid is %d\n", spawnpid);
+                fflush(stdout);
+            } else {
+                pid_t runpid = waitpid(spawnpid, lastStatus, 0);
+            }
             
-
-
-
-
-            
-    //         // while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-    //         //     printf("child %d terminated\n", spawnPid);
-    //         //     printExitStatus(*childExitStatus);
-    //         //     fflush(stdout);
-    //         // }
-    // }
+            while ((spawnpid = waitpid(-1, lastStatus, WNOHANG)) > 0) {
+                printf("child %d terminated\n", spawnpid);
+                if (WIFEXITED(lastStatus)) {
+		        // If exited by status
+		            printf("exit value %d\n", WEXITSTATUS(lastStatus));
+	            } else {
+		        // If terminated by signal
+		            printf("terminated by signal %d\n", WTERMSIG(lastStatus));
+	            }
+                fflush(stdout);
+            }
+    }
         // printf("The process with pid %d is returning from main\n", getpid());
         // free(cmd);
 }
@@ -334,10 +292,29 @@ int main(){
     int pid = getpid();
     int lastStatus = 0;
 
+
+    // Ignore ^C
+	struct sigaction sa_sigint = {0};
+	sa_sigint.sa_handler = SIG_IGN;
+	sigfillset(&sa_sigint.sa_mask);
+	sa_sigint.sa_flags = 0;
+	sigaction(SIGINT, &sa_sigint, NULL);
+
+	// // Redirect ^Z to catchSIGTSTP()
+	// struct sigaction sa_sigtstp = {0};
+	// sa_sigtstp.sa_handler = catchSIGTSTP;
+	// sigfillset(&sa_sigtstp.sa_mask);
+	// sa_sigtstp.sa_flags = 0;
+	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
+
+
     while (1){
         char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
         getcmd(cmdLine);
+        char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
+        strcpy(cmdCopy, cmdLine);
         cmdLine[strcspn(cmdLine, "\n")] = '\0';
+        cmdCopy[strcspn(cmdCopy, "\n")] = '\0';
 
         // printf("%s\n", cmdLine);
 
@@ -356,33 +333,14 @@ int main(){
             continue;
         } 
         else {
-            // printf("I am back in main for runCmd\n");
-            // fflush(stdout);
-            // printf("cmdLine before run is %s\n", cmdLine);
             fflush(stdout);
-            // printf("%d\n", lastStatus);
-            runCmd(cmdLine, &lastStatus);
+            runCmd(cmdCopy, &lastStatus);
         }
 
-        // printf("%s\n", cmdLine);
-        // printf("Is it the free?\n");
-        // fflush(stdout);
-        // free(cmdLine);
+        fflush(stdout);
+        free(cmdLine);
+        free(cmdCopy);
     }
 
-    // // Ignore ^C
-	// struct sigaction sa_sigint = {0};
-	// sa_sigint.sa_handler = SIG_IGN;
-	// sigfillset(&sa_sigint.sa_mask);
-	// sa_sigint.sa_flags = 0;
-	// sigaction(SIGINT, &sa_sigint, NULL);
-
-	// // Redirect ^Z to catchSIGTSTP()
-	// struct sigaction sa_sigtstp = {0};
-	// sa_sigtstp.sa_handler = catchSIGTSTP;
-	// sigfillset(&sa_sigtstp.sa_mask);
-	// sa_sigtstp.sa_flags = 0;
-	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
-    printf("I am leaving now\n");
     return EXIT_SUCCESS;
 }
