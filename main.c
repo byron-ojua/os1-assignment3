@@ -5,7 +5,7 @@ int main(){
     int pid = getpid();
     int lastStatus = 0;
 
-    // Ignore ^C
+    // From Exploration: Signal Handling API - Ignore ^C (SIG_IGN)
 	struct sigaction sa_sigint = {0};
 	sa_sigint.sa_handler = SIG_IGN;
 	sigfillset(&sa_sigint.sa_mask);
@@ -73,6 +73,7 @@ int checkExit(char *cmdLine){
     //Check if command string is == 'exit'
     if(strcmp(CMD_EXIT, cmdLine) == 0){
         printf("\n");
+        fflush(stdout);
         return 1;
     }
 
@@ -105,8 +106,10 @@ int isEcho(char *cmdLine){
         // Echo message if one is present, otherwise new line
         if(strlen(cmdLine) > 5){
             printf("%s\n", &cmdLine[5]);
+            fflush(stdout);
         } else {
             printf("\n");
+            fflush(stdout);
         }
 
         return 1;
@@ -208,6 +211,7 @@ int isBuiltIn(char *cmdLine, int *status){
     // Check if cmd is a status command
     } else if (strcmp(cmd->cmd,"status") == 0){
         printf("exit value %d\n", *status);
+        fflush(stdout);
         free(cmd);
         return 1;
     }
@@ -310,6 +314,7 @@ void runCmd(char *cmdLine, int *lastStatus){
             // Check for terminated processes, and what terminated the,
             while ((spawnpid = waitpid(-1, lastStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnpid);
+                fflush(stdout);
                 if (WIFEXITED(lastStatus)) {
 		        // If exited by status
 		            printf("exit value %d\n", WEXITSTATUS(lastStatus));
