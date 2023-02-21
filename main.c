@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -22,7 +23,9 @@
 struct command{
     char *cmd;
     int background;
+    int in;
     char *input;
+    int out;
     char *output;
     char args[512][BUFFER_SIZE];
     int numArgs;
@@ -116,11 +119,13 @@ struct command *createCmd(char *cmdLine){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
             cmd->output = calloc(strlen(cmdtoken) + 1, sizeof(char));
             strcpy(cmd->output, cmdtoken);
+            cmd->out = 1;
         // Check for input file
         } else if (cmdtoken[0] == '<'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
             cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
             strcpy(cmd->input, cmdtoken);
+            cmd->in = 1;
         // Check for arguments
         } else {
             strcpy(cmd->args[cmd->numArgs], cmdtoken);
@@ -164,8 +169,10 @@ int isBuiltIn(struct command *cmd, int *status){
         
         printf("CWD is %s\n", getcwd(dir, BUFFER_SIZE));
         free(dir);
+        return 1;
     } else if (strcmp(cmd->cmd,"status") == 0){
-
+        printf("exit value %d\n", status);
+        return 1;
     }
     return 0;
 }
@@ -195,19 +202,48 @@ void runCmd(struct command *cmd){
     char *execArgs[BUFFER_SIZE];
     execArgs[0] = cmd->cmd;
 
-    for(int i = 0; i < cmd->numArgs; i++){
-        execArgs[i + 1] = cmd->args[i];
+    if(cmd->args[0]){
+        for(int i = 0; i < cmd->numArgs; i++){
+            execArgs[i + 1] = cmd->args[i];
+        }
     }
     execArgs[cmd->numArgs + 1] = NULL;
 
     execvp(execArgs[0], execArgs);
-    perror("exexv");
+    perror("exexvp");
     exit(EXIT_FAILURE);
 }
 
+void setIOStreams(struct command *cmd){
+    if (cmd->in == 1){
+        int file = open(cmd->input, O_RDONLY);
+        if(file == -1){
+            printf("Cannot open %s for input\n", cmd->input);
+            fflush(stdout);
+            exit(1);
+        } else {
+            dup2(file, STDIN_FILENO);
+            close(file);
+        }
+    }
+    if (cmd->out == 1){
+        int file = open(cmd->output, O_WRONLY | O_TRUNC | O_CREAT, 0777);
+        if(file == -1){
+            printf("Cannot write to %s for output\n", cmd->output);
+            fflush(stdout);
+            exit(1);
+        } else {
+            dup2(file, STDOUT_FILENO);
+            close(file);
+        }
+    }
+}
+
+// Exit status code video https://www.youtube.com/watch?v=DiNmwwQWl0g
 int main(){
     char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
     int *lastStatus = 0;
+
 
     while (1){
         getcmd(cmdLine);
@@ -221,8 +257,40 @@ int main(){
         struct command *cmd = createCmd(cmdLine);
         // printCmd(cmd);
         if(isBuiltIn(cmd, lastStatus)) continue;
-        
-        runCmd(cmd);
+        fflush(stdout);
+
+        // Code from Exploration: Process API - Monitoring Child Processes
+        pid_t spawnpid = -5;
+        int childStatus;
+        int childPid;
+        spawnpid = fork();
+    
+    	switch (spawnpid){
+            case -1:
+                // perror("fork() failed!");
+                exit(1);
+                break;
+            case 0:
+                // spawnpid is 0 in the child
+                // printf("I am the child. My pid  = %d\n", getpid());
+                setIOStreams(cmd);
+                runCmd(cmd);
+                printf("This ran");
+                fflush(stdout);
+                break;
+            default:
+                // spawnpid is the pid of the child
+                // printf("I am the parent. My pid  = %d\n", getpid());
+                childPid = wait(&childStatus);
+                // if (WIFEXITED(childStatus)) {
+                //     lastStatus = WEFEXITED(childStatus);
+                // }
+                // printf("Parent's waiting is done as the child with pid %d exited\n", childPid);
+                break;
+        }
+        // printf("The process with pid %d is returning from main\n", getpid());
+
+        // setIOStreams(cmd);
 
         free(cmd);
     }
