@@ -19,16 +19,37 @@ int main(){
 	// sa_sigtstp.sa_flags = 0;
 	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
-    while (1){
-        // Get command line input
-        char* cmd_buffer = malloc(sizeof(char) * BUFFER_SIZE);
-        getcmd(cmd_buffer);
-        cmd_buffer[strcspn(cmd_buffer, "\n")] = '\0';
+    char* cmd_buffer = malloc(sizeof(char) * BUFFER_SIZE);
+    char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
+    char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
 
-        char* cmdLine = expandInput(cmd_buffer, pid);
-        char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
+    while (1){
+        
+        cmd_buffer[0] = '\0';
+        cmdLine[0] = '\0';
+        cmdCopy[0] = '\0';
+        // Get command line input
+        getcmd(cmd_buffer);
+        if(cmd_buffer[0] == '\n') continue;
+        printf("cmd_buffer is: %s", cmd_buffer);
+
+        expandInput(cmd_buffer, cmdLine, pid);
+
+
+        // if(cmd_buffer[0] == '\n'){
+        //     strcpy(cmdLine, cmd_buffer);
+        //     // cmdLine[strcspn(cmdLine, "\n")] = '\0';
+        // } else {
+        //     expandInput(cmd_buffer, cmdLine, pid);
+        //     // cmd_buffer[strcspn(cmd_buffer, "\n")] = '\0';
+        // }
+
         strcpy(cmdCopy, cmdLine);
-        free(cmd_buffer);
+        // cmdLine[strcspn(cmdLine, "\n")] = '\0';
+        // cmdCopy[strcspn(cmdCopy, "\n")] = '\0';
+        printf("cmdLine is: %s\n", cmdLine);
+        printf("cmdCopy is: %s\n", cmdCopy);
+
 
         // Check if input a blank, comment, echo, or ecit command
         if(skipCmd(cmdLine) || isEcho(cmdLine)) continue;
@@ -41,14 +62,15 @@ int main(){
             continue;
         } 
         else {
-            free(cmdLine);
             runCmd(cmdCopy, &lastStatus);
         }
 
         fflush(stdout);
-        // free(cmdLine);
-        free(cmdCopy);
     }
+
+    free(cmd_buffer);
+    free(cmdLine);
+    free(cmdCopy);
 
     return EXIT_SUCCESS;
 }
@@ -65,7 +87,7 @@ void getcmd(char *cmdLine){
     getline(&cmdLine, &bufsize, stdin);
 }
 
-char * expandInput(char *buffer, int parentPid){
+void expandInput(char *buffer, char *cmdLine, int parentPid){
     char *new = malloc(sizeof(char) * BUFFER_SIZE);
     char pidStr[15];
     sprintf(pidStr, "%d", parentPid);
@@ -83,7 +105,9 @@ char * expandInput(char *buffer, int parentPid){
         
     }
 
-    return new;
+    new[strcspn(new, "\n")] = '\0';
+    sprintf(cmdLine, new, strlen(new));
+    free(new);
 }
 
 /**
@@ -174,8 +198,8 @@ struct command *createCmd(char *cmdLine){
     // Grab init command
     char *cmdptr;
     char *cmdtoken = strtok_r(cmdLine, " ", &cmdptr);
-    cmd->cmd = calloc(strlen(cmdtoken) + 1, sizeof(char));
-    strcpy(cmd->cmd, cmdtoken);
+    // cmd->cmd = calloc(strlen(cmdtoken) + 1, sizeof(char));
+    strncpy(cmd->cmd, cmdtoken, BUFFER_SIZE);
     cmdtoken = strtok_r(NULL, " ", &cmdptr);
 
     // Check for extra params
@@ -186,14 +210,14 @@ struct command *createCmd(char *cmdLine){
         // Check for output file
         } else if (cmdtoken[0] == '>'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
-            cmd->output = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            strcpy(cmd->output, cmdtoken);
+            // cmd->output = calloc(strlen(cmdtoken) + 1, sizeof(char));
+            strncpy(cmd->output, cmdtoken, BUFFER_SIZE);
             cmd->out = 1;
         // Check for input file
         } else if (cmdtoken[0] == '<'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
-            cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            strcpy(cmd->input, cmdtoken);
+            // cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
+            strncpy(cmd->input, cmdtoken, BUFFER_SIZE);
             cmd->in = 1;
         // Check for arguments
         } else {
@@ -238,6 +262,8 @@ int isBuiltIn(char *cmdLine, int *status){
         free(cmd);
         return 1;
     }
+
+    free(cmd);
     return 0;
 }
 
@@ -316,6 +342,7 @@ void runCmd(char *cmdLine, int *lastStatus){
             // *lastStatus = 0;
 
             // Run exec() process, and handle errors if it fails
+            free(cmdLine);
             execvp(execArgs[0], execArgs);
             perror("exexvp");
             fflush(stdout);
