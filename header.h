@@ -20,25 +20,25 @@
 #define CMD_ECHO "echo"
 
 struct command{
-    char *cmd;
+    char cmd[BUFFER_SIZE];
     int background;
     int in;
-    char *input;
+    char input[BUFFER_SIZE];
     int out;
-    char *output;
+    char output[BUFFER_SIZE];
     char args[512][BUFFER_SIZE];
     int numArgs;
 };
 
 void getcmd(char *cmdLine);
 int checkExit(char *cmdLine);
-int skipCmd(char *cmdLine);
 int isEcho(char *cmdLine);
 void printCmd(struct command *cmd);
 struct command *createCmd(char *cmdLine);
 int isBuiltIn(char *cmdLine, int *status);
 void setIOStreams(struct command *cmd);
 void runCmd(char *cmdLine, int *lastStatus);
-char * expandInput(char *buffer, int parentPid);
+void expandInput(char *buffer, char *cmdLine, int parentPid);
+void catchSIGTSTP(int signo);
 
 #endif // !HEADER_H

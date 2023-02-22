@@ -1,54 +1,68 @@
 #include "header.h"
 
+int allowBackground = 1;
+
 // Exit status code video https://www.youtube.com/watch?v=DiNmwwQWl0g
 int main(){
     int pid = getpid();
     int lastStatus = 0;
 
-    // From Exploration: Signal Handling API - Ignore ^C (SIG_IGN)
+    char* cmdBuffer = malloc(sizeof(char) * BUFFER_SIZE);
+    char* cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
+    char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
+
+	// Ignore ^C - From exploration
 	struct sigaction sa_sigint = {0};
 	sa_sigint.sa_handler = SIG_IGN;
 	sigfillset(&sa_sigint.sa_mask);
 	sa_sigint.sa_flags = 0;
 	sigaction(SIGINT, &sa_sigint, NULL);
 
-	// // Redirect ^Z to catchSIGTSTP()
-	// struct sigaction sa_sigtstp = {0};
-	// sa_sigtstp.sa_handler = catchSIGTSTP;
-	// sigfillset(&sa_sigtstp.sa_mask);
-	// sa_sigtstp.sa_flags = 0;
-	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
+	// Redirect ^Z to catchSIGTSTP()
+	struct sigaction sa_sigtstp = {0};
+	sa_sigtstp.sa_handler = catchSIGTSTP;
+	sigfillset(&sa_sigtstp.sa_mask);
+	sa_sigtstp.sa_flags = 0;
+	sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
     while (1){
-        // Get command line input
-        char* cmd_buffer = malloc(sizeof(char) * BUFFER_SIZE);
-        getcmd(cmd_buffer);
-        cmd_buffer[strcspn(cmd_buffer, "\n")] = '\0';
+        // Get command line input and break if none
+        getcmd(cmdBuffer);
+        if(cmdBuffer[0] == '\n') continue;
+        if(cmdBuffer[0] == '#') continue;
+        
+        cmdBuffer[strcspn(cmdBuffer, "\n")] = '\0';
 
-        char* cmdLine = expandInput(cmd_buffer, pid);
-        char* cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
+        sprintf(cmdLine, "%s", cmdBuffer);
+
+        expandInput(cmdBuffer, cmdLine, pid);
+
         strcpy(cmdCopy, cmdLine);
-        free(cmd_buffer);
 
-        // Check if input a blank, comment, echo, or ecit command
-        if(skipCmd(cmdLine) || isEcho(cmdLine)) continue;
+        // // Check if input is an echo or exit command
+        if(isEcho(cmdLine)) continue;
         if(checkExit(cmdLine)) break;
         fflush(stdout);
 
-        // If built i nfunction, run. Else run runCmd
+        // If built in function, run. Else run runCmd
         if(isBuiltIn(cmdLine, &lastStatus)){
             fflush(stdout);
             continue;
         } 
         else {
-            free(cmdLine);
             runCmd(cmdCopy, &lastStatus);
         }
 
         fflush(stdout);
-        // free(cmdLine);
+        free(cmdLine);
         free(cmdCopy);
+        cmdLine = malloc(sizeof(char) * BUFFER_SIZE);
+        cmdCopy = malloc(sizeof(char) * BUFFER_SIZE);
     }
+
+    free(cmdBuffer);
+    free(cmdLine);
+    free(cmdCopy);
 
     return EXIT_SUCCESS;
 }
@@ -63,27 +77,32 @@ void getcmd(char *cmdLine){
     fflush(stdout);
     size_t bufsize = BUFFER_SIZE;
     getline(&cmdLine, &bufsize, stdin);
+    fflush(stdin);
 }
 
-char * expandInput(char *buffer, int parentPid){
-    char *new = malloc(sizeof(char) * BUFFER_SIZE);
+/**
+ * @brief Formats buffer string and puts new string in cmdLine. Expands pid var is requested
+ * 
+ * @param buffer char array holding user input
+ * @param cmdLine char array to put formated command in
+ * @param parentPid int PID of smallsh
+ */
+void expandInput(char *buffer, char *cmdLine, int parentPid){
+    char new[BUFFER_SIZE] = "\0";
     char pidStr[15];
     sprintf(pidStr, "%d", parentPid);
 
-    for(int i = 0; i <= strlen(buffer) - 1; i++){
-        if (buffer[i] == '$' && buffer[i+1] == '$')
-        {
+    for(int i = 0; i < strlen(buffer); i++){
+        if (i + 1 < strlen(buffer) && buffer[i] == '$' && buffer[i+1] == '$'){
             strncat(new, pidStr, strlen(pidStr));
             i++;
         } else {
-            char cpyChar[2] = "\0";
-            cpyChar[0] = buffer[i];
-            strncat(new, cpyChar, strlen(cpyChar));
+            new[strlen(new)] = buffer[i];
         }
-        
     }
 
-    return new;
+    sprintf(cmdLine, new, strlen(new));
+    fflush(stdout);
 }
 
 /**
@@ -97,20 +116,6 @@ int checkExit(char *cmdLine){
     if(strcmp(CMD_EXIT, cmdLine) == 0){
         printf("\n");
         fflush(stdout);
-        return 1;
-    }
-
-    return 0;
-}
-
-/**
- * @brief Checks is command should be skipped by checking if input is '\0' or '#'
- * 
- * @param cmdLine char array to check
- * @return int 1 is line should be skipped, else 0
- */
-int skipCmd(char *cmdLine){
-    if(cmdLine[0] == '\0' || cmdLine[0] == '#'){
         return 1;
     }
 
@@ -134,7 +139,6 @@ int isEcho(char *cmdLine){
             printf("\n");
             fflush(stdout);
         }
-
         return 1;
     }
     return 0;
@@ -174,8 +178,7 @@ struct command *createCmd(char *cmdLine){
     // Grab init command
     char *cmdptr;
     char *cmdtoken = strtok_r(cmdLine, " ", &cmdptr);
-    cmd->cmd = calloc(strlen(cmdtoken) + 1, sizeof(char));
-    strcpy(cmd->cmd, cmdtoken);
+    strncpy(cmd->cmd, cmdtoken, BUFFER_SIZE);
     cmdtoken = strtok_r(NULL, " ", &cmdptr);
 
     // Check for extra params
@@ -186,14 +189,12 @@ struct command *createCmd(char *cmdLine){
         // Check for output file
         } else if (cmdtoken[0] == '>'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
-            cmd->output = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            strcpy(cmd->output, cmdtoken);
+            strncpy(cmd->output, cmdtoken, BUFFER_SIZE);
             cmd->out = 1;
         // Check for input file
         } else if (cmdtoken[0] == '<'){
             cmdtoken = strtok_r(NULL, " ", &cmdptr);
-            cmd->input = calloc(strlen(cmdtoken) + 1, sizeof(char));
-            strcpy(cmd->input, cmdtoken);
+            strncpy(cmd->input, cmdtoken, BUFFER_SIZE);
             cmd->in = 1;
         // Check for arguments
         } else {
@@ -238,6 +239,8 @@ int isBuiltIn(char *cmdLine, int *status){
         free(cmd);
         return 1;
     }
+
+    free(cmd);
     return 0;
 }
 
@@ -313,6 +316,7 @@ void runCmd(char *cmdLine, int *lastStatus){
 
             execArgs[cmd->numArgs + 1] = NULL;
             fflush(stdout);
+            
             // *lastStatus = 0;
 
             // Run exec() process, and handle errors if it fails
@@ -325,7 +329,7 @@ void runCmd(char *cmdLine, int *lastStatus){
         // Parent function
         default:
             // If child is a background process, do not wait for process exit and display childPID
-            if(cmd->background){
+            if(cmd->background && allowBackground){
                 pid_t runpid = waitpid(spawnpid, lastStatus, WNOHANG);
                 printf("background pid is %d\n", spawnpid);
                 fflush(stdout);
@@ -348,4 +352,24 @@ void runCmd(char *cmdLine, int *lastStatus){
                 fflush(stdout);
             }
     }
+}
+
+/**
+ * @brief Defins how to catch SIGTSTP and background processes
+ * 
+ * @param signo 
+ */
+void catchSIGTSTP(int signo) {
+	// If it's 1, set it to 0 and display a message reentrantly
+	if (allowBackground == 1) {
+		char* message = "Entering foreground-only mode (& is now ignored)\n";
+		write(1, message, 49);
+		fflush(stdout);
+		allowBackground = 0;
+	} else {
+		char* message = "Exiting foreground-only mode\n";
+		write (1, message, 29);
+		fflush(stdout);
+		allowBackground = 1;
+	}
 }
