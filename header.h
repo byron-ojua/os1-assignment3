@@ -37,7 +37,7 @@ void printCmd(struct command *cmd);
 struct command *createCmd(char *cmdLine);
 int isBuiltIn(char *cmdLine, int *status);
 void setIOStreams(struct command *cmd);
-void runCmd(char *cmdLine, int *lastStatus);
+void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa);
 void expandInput(char *buffer, char *cmdLine, int parentPid);
 void catchSIGTSTP(int signo);
 

@@ -50,7 +50,7 @@ int main(){
             continue;
         } 
         else {
-            runCmd(cmdCopy, &lastStatus);
+            runCmd(cmdCopy, &lastStatus, sa_sigint);
         }
 
         fflush(stdout);
@@ -284,7 +284,7 @@ void setIOStreams(struct command *cmd){
  * @param cmdLine char array which contains data to mkae command
  * @param lastStatus int for childExitStatus
  */
-void runCmd(char *cmdLine, int *lastStatus){
+void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
     // Code from Exploration: Process API - Monitoring Child Processes
     struct command *cmd = createCmd(cmdLine);
     pid_t spawnpid = -5;
@@ -301,6 +301,10 @@ void runCmd(char *cmdLine, int *lastStatus){
             break;
         // If process is child
         case 0:
+
+        	sa.sa_handler = SIG_DFL;
+			sigaction(SIGINT, &sa, NULL);
+
             // Redirect input files
             setIOStreams(cmd);
 
@@ -323,7 +327,7 @@ void runCmd(char *cmdLine, int *lastStatus){
             execvp(execArgs[0], execArgs);
             perror("exexvp");
             fflush(stdout);
-            // *lastStatus = 1;
+            *lastStatus = 1;
             exit(1);
             break;
         // Parent function
@@ -338,7 +342,7 @@ void runCmd(char *cmdLine, int *lastStatus){
                 pid_t runpid = waitpid(spawnpid, lastStatus, 0);
             }
             
-            // Check for terminated processes, and what terminated the,
+            // Check for terminated processes, and what terminated the, process
             while ((spawnpid = waitpid(-1, lastStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnpid);
                 fflush(stdout);
@@ -362,13 +366,15 @@ void runCmd(char *cmdLine, int *lastStatus){
 void catchSIGTSTP(int signo) {
 	// If it's 1, set it to 0 and display a message reentrantly
 	if (allowBackground == 1) {
-		char* message = "Entering foreground-only mode (& is now ignored)\n";
-		write(1, message, 49);
+		// char* message = "Entering foreground-only mode (& is now ignored)\n";
+		// write(1, message, 49);
+        puts("\nNow in foreground-only mode (& is now ignored)");
 		fflush(stdout);
 		allowBackground = 0;
 	} else {
-		char* message = "Exiting foreground-only mode\n";
-		write (1, message, 29);
+		// char* message = "Exiting foreground-only mode\n";
+		// write (1, message, 29);
+        puts("\nExiting foreground-only mode (& will now )");
 		fflush(stdout);
 		allowBackground = 1;
 	}
