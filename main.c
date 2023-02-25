@@ -234,7 +234,7 @@ int isBuiltIn(char *cmdLine, int *status){
         return 1;
     // Check if cmd is a status command
     } else if (strcmp(cmd->cmd,"status") == 0){
-        printf("exit value %d\n", *status);
+        printf("exit value %d\n", WEXITSTATUS(*status));
         fflush(stdout);
         free(cmd);
         return 1;
@@ -301,7 +301,6 @@ void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
             break;
         // If process is child
         case 0:
-
         	sa.sa_handler = SIG_DFL;
 			sigaction(SIGINT, &sa, NULL);
 
