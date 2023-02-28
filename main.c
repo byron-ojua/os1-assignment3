@@ -50,7 +50,7 @@ int main(){
             continue;
         } 
         else {
-            runCmd(cmdCopy, &lastStatus, sa_sigint);
+            runCmd(cmdCopy, &lastStatus);
         }
 
         fflush(stdout);
@@ -92,6 +92,7 @@ void expandInput(char *buffer, char *cmdLine, int parentPid){
     char pidStr[15];
     sprintf(pidStr, "%d", parentPid);
 
+    // Search for $$ in input string. If found, write PID number to new string
     for(int i = 0; i < strlen(buffer); i++){
         if (i + 1 < strlen(buffer) && buffer[i] == '$' && buffer[i+1] == '$'){
             strncat(new, pidStr, strlen(pidStr));
@@ -101,6 +102,7 @@ void expandInput(char *buffer, char *cmdLine, int parentPid){
         }
     }
 
+    // Copy new to cmdLine var
     sprintf(cmdLine, new, strlen(new));
     fflush(stdout);
 }
@@ -208,7 +210,7 @@ struct command *createCmd(char *cmdLine){
     return cmd;
 }
 
- /**
+/**
   * @brief Checks if command is built in, and runs if so
   * 
   * @param cmdLine char array of params to build command
@@ -251,29 +253,82 @@ int isBuiltIn(char *cmdLine, int *status){
  */
 void setIOStreams(struct command *cmd){
     // If there is a specified input stream
-    if (cmd->in == 1){
-        int file = open(cmd->input, O_RDONLY);
-        if(file == -1){
-            printf("Cannot open %s for input\n", cmd->input);
-            fflush(stdout);
-            exit(1);
+    if (cmd->background == 1){
+        if (cmd->in == 1){
+            int file = open(cmd->input, O_RDONLY);
+            if(file == -1){
+                printf("Cannot open %s for input\n", cmd->input);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to input stream
+                dup2(file, STDIN_FILENO);
+                close(file);
+            }
         } else {
-            // Assign input file to input stream
-            dup2(file, STDIN_FILENO);
-            close(file);
+            // Set default input to /dev/null
+            int file = open("/dev/null", O_RDONLY);
+            if(file == -1){
+                printf("Cannot open %s for input\n", cmd->input);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to input stream
+                dup2(file, STDIN_FILENO);
+                close(file);
+            }
         }
-    }
-    // If there is a specified output stream
-    if (cmd->out == 1){
-        int file = open(cmd->output, O_WRONLY | O_TRUNC | O_CREAT, 0777);
-        if(file == -1){
-            printf("Cannot write to %s for output\n", cmd->output);
-            fflush(stdout);
-            exit(1);
+        // If there is a specified output stream
+        if (cmd->out == 1){
+            int file = open(cmd->output, O_WRONLY | O_TRUNC | O_CREAT, 0777);
+            if(file == -1){
+                printf("Cannot write to %s for output\n", cmd->output);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to output stream
+                dup2(file, STDOUT_FILENO);
+                close(file);
+            }
         } else {
-            // Assign input file to output stream
-            dup2(file, STDOUT_FILENO);
-            close(file);
+            // Set defualt to /dev/null
+            int file = open("/dev/null", O_WRONLY);
+            if(file == -1){
+                printf("Cannot write to %s for output\n", cmd->output);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to output stream
+                dup2(file, STDOUT_FILENO);
+                close(file);
+            }
+        }
+    } else {
+        // If there is a specified input stream
+        if (cmd->in == 1){
+            int file = open(cmd->input, O_RDONLY);
+            if(file == -1){
+                printf("Cannot open %s for input\n", cmd->input);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to input stream
+                dup2(file, STDIN_FILENO);
+                close(file);
+            }
+         }
+        // If there is a specified output stream
+        if (cmd->out == 1){
+            int file = open(cmd->output, O_WRONLY | O_TRUNC | O_CREAT, 0777);
+            if(file == -1){
+                printf("Cannot write to %s for output\n", cmd->output);
+                fflush(stdout);
+                exit(1);
+            } else {
+                // Assign input file to output stream
+                dup2(file, STDOUT_FILENO);
+                close(file);
+            }
         }
     }
 }
@@ -284,7 +339,7 @@ void setIOStreams(struct command *cmd){
  * @param cmdLine char array which contains data to mkae command
  * @param lastStatus int for childExitStatus
  */
-void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
+void runCmd(char *cmdLine, int *lastStatus){
     // Code from Exploration: Process API - Monitoring Child Processes
     struct command *cmd = createCmd(cmdLine);
     pid_t spawnpid = -5;
@@ -292,6 +347,17 @@ void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
     // Fork structure example from https://github.com/brentirwin/cs344-smallsh/blob/master/smallsh.c
 
     spawnpid = fork();
+
+    // Set ^C to defualt
+    struct sigaction child_sigint = {{0}}, child_sigtstp = {{0}};
+    child_sigint.sa_handler = SIG_DFL;
+    sigfillset(&child_sigint.sa_mask);
+    child_sigint.sa_flags = 0;
+
+    // Ignore ^Z
+    child_sigtstp.sa_handler = SIG_IGN;
+    sigfillset(&child_sigtstp.sa_mask);
+    child_sigtstp.sa_flags = 0;
     
     switch (spawnpid){
         // If fork() fails
@@ -301,8 +367,11 @@ void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
             break;
         // If process is child
         case 0:
-        	sa.sa_handler = SIG_DFL;
-			sigaction(SIGINT, &sa, NULL);
+            sigaction(SIGTSTP, &child_sigtstp, NULL);
+
+            if (cmd->background == 0){
+                sigaction(SIGINT, &child_sigint, NULL);
+            }
 
             // Redirect input files
             setIOStreams(cmd);
@@ -365,15 +434,15 @@ void runCmd(char *cmdLine, int *lastStatus, struct sigaction sa){
 void catchSIGTSTP(int signo) {
 	// If it's 1, set it to 0 and display a message reentrantly
 	if (allowBackground == 1) {
-		// char* message = "Entering foreground-only mode (& is now ignored)\n";
-		// write(1, message, 49);
-        puts("\nNow in foreground-only mode (& is now ignored)");
+		char* message = "Entering foreground-only mode (& is now ignored)\n";
+		write(1, message, 49);
+        // puts("\nNow in foreground-only mode (& is now ignored)");
 		fflush(stdout);
 		allowBackground = 0;
 	} else {
-		// char* message = "Exiting foreground-only mode\n";
-		// write (1, message, 29);
-        puts("\nExiting foreground-only mode (& will now )");
+		char* message = "Exiting foreground-only mode\n";
+		write (1, message, 29);
+        // puts("\nExiting foreground-only mode (& will now )");
 		fflush(stdout);
 		allowBackground = 1;
 	}
